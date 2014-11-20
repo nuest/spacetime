@@ -77,26 +77,32 @@ subs.STIDF <- function(x, i, j, ... , drop = FALSE) {
 	missing.k = k = TRUE
 	dots = list(...)
   
-  if (length(dots) > 0) {
-      missing.k = FALSE
-      k = dots[[1]]
-  }
+	if (length(dots) > 0) {
+		missing.k = FALSE
+		k = dots[[1]]
+	}
 
 	if (missing.i && missing.j && missing.k)
 		return(x)
   
-  matrix.i <- FALSE
+	if (!missing.i && is(i, "STI")) { # highjack i and j:
+		j = which(!is.na(timeMatch(x,i)))
+		i = which(!is.na(over(x@sp, geometry(i@sp))))
+		missing.j = FALSE
+	}
+
+	matrix.i <- FALSE
   
-  if (!missing.i) {
-    if (is.matrix(i)) {
-      stopifnot(ncol(i)==2)
-      i <- i[order(i[,2]),]
-      j <- i[,2]
-      i <- i[,1]
-      missing.j <- FALSE
-      matrix.i <- TRUE
-    }
-  }
+	if (!missing.i) {
+		if (is.matrix(i)) {
+			stopifnot(ncol(i)==2)
+			i <- i[order(i[,2]),,drop=FALSE]
+			j <- i[,2]
+			i <- i[,1]
+			missing.j <- FALSE
+			matrix.i <- TRUE
+		}
+	}
 
 	# space
 	if (missing.i)
@@ -107,15 +113,13 @@ subs.STIDF <- function(x, i, j, ... , drop = FALSE) {
 		i = rep(i, length.out = length(x@sp))
 		i = which(i)
 	} else if (is.character(i)) { # suggested by BG:
-	  if (length(i) > length(unique(i))) {
-      si <- numeric(0)
-      for (elem in i) {
-        si <- c(si, which(row.names(x@sp) == elem))
-      }
-      i <- sort(si)
-	  } else {
-      i = row.names(x@sp) %in% i
-	  }
+	  	if (length(i) > length(unique(i))) {
+      		si <- numeric(0)
+      		for (elem in i)
+        		si <- c(si, which(row.names(x@sp) == elem))
+      		i <- sort(si)
+	  	} else
+      		i = row.names(x@sp) %in% i
 	}
 
 	# time
@@ -130,27 +134,27 @@ subs.STIDF <- function(x, i, j, ... , drop = FALSE) {
 		# takes care of negative indices:
 		.time = .time[j]
 		# get back the corresponding index vector t, to use for @data:
-    jtime <- as.vector(.time[, nct])
+    	jtime <- as.vector(.time[, nct])
 		j = as.vector(.time[, nct+1])
 	}
 	
 	if (is.numeric(i) && is.numeric(j)) {
-    if(matrix.i)
-      i <- i[i==j]
-    else {
-      ui <- unique(i)
-      uj <- unique(j)
-      ti <- table(i)
-      tj <- table(j)
+    	if(matrix.i)
+      		i <- i[i==j]
+    	else {
+      		ui <- unique(i)
+      		uj <- unique(j)
+      		ti <- table(i)
+      		tj <- table(j)
       
-      ind <- numeric(0)
-      for (elem in ui[ui %in% uj]) {
-        freq <- min(ti[names(ti) == as.character(elem)], 
+      		ind <- numeric(0)
+      		for (elem in ui[ui %in% uj]) {
+        		freq <- min(ti[names(ti) == as.character(elem)], 
                     tj[names(tj) == as.character(elem)])
-        ind <- c(ind, rep(elem, freq))
-      }
-      i <- ind[order(jtime[ind])]
-    }
+        		ind <- c(ind, rep(elem, freq))
+      		}
+      		i <- ind[order(jtime[ind])]
+    	}
 	}
 
 	if (is.logical(i) && is.logical(j))
@@ -188,10 +192,15 @@ rbind.STIDF <- function(...) {
     dots = list(...)
     names(dots) <- NULL
 	stopifnot(identicalCRS(dots))
+	# c() drops tzone attribute:
+	time =    do.call(c, lapply(dots, function(x) index(x)))
+	attr(time, "tzone") = attr(index(dots[[1]]@time), "tzone")
+	endTime = do.call(c, lapply(dots, function(x) x@endTime))
+	attr(endTime, "tzone") = attr(index(dots[[1]]@endTime), "tzone")
 	STIDF(
 		sp =      do.call(rbind, lapply(dots, function(x) x@sp)),
-		time =    do.call(c, lapply(dots, function(x) index(x))),
+		time =    time,
 		data =    do.call(rbind, lapply(dots, function(x) x@data)),
-		endTime = do.call(c, lapply(dots, function(x) x@endTime))
+		endTime = endTime
 	) # will re-order according to time
 }
